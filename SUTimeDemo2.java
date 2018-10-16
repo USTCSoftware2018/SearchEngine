@@ -61,7 +61,7 @@ public class SUTimeDemo2 {
 		}	
 	}
 	
-	public static List<String> annotateText(String text, String referenceDate) {
+	public static String[] annotateText(String text, String referenceDate) {
 		try {
 			if (referenceDate == null || referenceDate.isEmpty()) {
 				SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
@@ -102,17 +102,17 @@ public class SUTimeDemo2 {
 						//System.out.println(temporal.getRange().begin());
 						//System.out.println(temporal.getRange().end());
 						//System.out.println("!");
-						List<String> timeRange = null;
+						String[] timeRange = null;
 						if (type == "DATE" || type == "DURATION")
 						{
-							timeRange = NormalizeDurationAndDate(temporal);
+							timeRange = NormalizeDurationAndDate(temporal, cm.toString());
 						}
 						
 						else if (type == "TIME")
 						{
-							timeRange = NormalizeTime(value);
+							timeRange = NormalizeTime(value, cm.toString());
 						}
-						timeRange.add(cm.toString());
+						
 						
 						return timeRange;
 						
@@ -134,9 +134,9 @@ public class SUTimeDemo2 {
 		return null;
 	}
 	
-	public static List<String> NormalizeDurationAndDate(Temporal temporal) //默认beginTime,endTime 格式一样。
+	public static String[] NormalizeDurationAndDate(Temporal temporal, String tokenText) //默认beginTime,endTime 格式一样。
 	{
-		List<String> returnTime = new ArrayList<>();
+		String[] returnTime = new String[3];
 		String beginTime = temporal.getRange().begin().toString();
 		String endTime = temporal.getRange().end().toString();
 		
@@ -191,9 +191,9 @@ public class SUTimeDemo2 {
 			//System.out.println(endDate.getTime());
 			Long longBeginDate = beginDate.getTime();
 			Long longEndDate = endDate.getTime();
-			
-			returnTime.add(longBeginDate.toString());
-			returnTime.add(longEndDate.toString());
+			returnTime[0] = longBeginDate.toString();
+			returnTime[1] = longEndDate.toString();
+			returnTime[2] = tokenText;
 		} catch (ParseException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -205,8 +205,8 @@ public class SUTimeDemo2 {
 		return returnTime;
 	}
 	
-	public static List<String> NormalizeTime(String value) {
-		List<String> returnTime = new ArrayList<>();
+	public static String[] NormalizeTime(String value, String tokenText) {
+		String[] returnTime = new String[3];
 		Pattern pattern1 = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 		Pattern pattern2 = Pattern.compile("T[a-zA-Z0-9:]+");
 		Matcher matcher1 = pattern1.matcher(value);
@@ -266,9 +266,9 @@ public class SUTimeDemo2 {
 			//System.out.println(endTime);
 			Long longBeginDate = beginDate.getTime();
 			Long longEndDate = endDate.getTime();
-			returnTime.add(longBeginDate.toString());
-			returnTime.add(longEndDate.toString());
-			
+			returnTime[0] = longBeginDate.toString();
+			returnTime[1] = longEndDate.toString();
+			returnTime[2] = tokenText;
 			
 		} catch (ParseException e) {
 			// TODO Auto-generated catch block
@@ -277,11 +277,11 @@ public class SUTimeDemo2 {
 	
 	return returnTime;	
 	}
-	public static List<String> Parse(String string) {
+	public static String[] Parse(String string) {
 		setup();
 		String currentTime = SUTime.getCurrentTime().toString();
 		String formatTime = currentTime.substring(0, 10);
-		List<String> message = null;
+		String[] message = null;
 		message = annotateText(string,formatTime);
 		
 		return message;
@@ -289,10 +289,9 @@ public class SUTimeDemo2 {
 	
 	public static void main(String[] args)
 	{
-		for (String string:args)
+		for(String string:args)
 		{
 			Parse(string);
 		}
-		
 	}
 }
