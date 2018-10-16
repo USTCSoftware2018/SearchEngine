@@ -162,7 +162,7 @@ public class SUTimeDemo2 {
 			beginTime = beginTime + "-01T00:00:00";
 			
 			Calendar calendar = Calendar.getInstance();
-			calendar.set(calendar.YEAR, 2019);
+			calendar.set(calendar.YEAR, Integer.parseInt(endTime.substring(0,4)));
 			calendar.set(calendar.MONTH, Integer.parseInt(endTime.substring(5,7))-1);
 	        int lastDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH);
 	        calendar.set(Calendar.DAY_OF_MONTH, lastDay);
