@@ -1,4 +1,4 @@
-package demo.model;
+
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -35,7 +35,7 @@ import nu.xom.jaxen.function.SubstringAfterFunction;
 import edu.stanford.nlp.ling.CoreAnnotations.NormalizedNamedEntityTagAnnotation;
 import edu.stanford.nlp.optimization.QNMinimizer.eScaling;
 import edu.stanford.nlp.time.SUTime.IsoDate;
-public class SUTimeDemo2 {
+public class BiohubNLP {
 	
 	static AnnotationPipeline pipeline = null;
 	
