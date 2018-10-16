@@ -1,8 +1,11 @@
 package demo.model;
 import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -11,8 +14,11 @@ import java.util.Calendar;
 
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
+import org.joda.time.format.DateTimeFormatterBuilder;
 
-import edu.stanford.nlp.time.SUTime.Time;
+import edu.stanford.nlp.time.SUTime.PartialTime;
+import edu.stanford.nlp.time.SUTime.Time.*;
+
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.pipeline.Annotation;
@@ -28,16 +34,16 @@ import edu.stanford.nlp.util.CoreMap;
 import nu.xom.jaxen.function.SubstringAfterFunction;
 import edu.stanford.nlp.ling.CoreAnnotations.NormalizedNamedEntityTagAnnotation;
 import edu.stanford.nlp.optimization.QNMinimizer.eScaling;
-
+import edu.stanford.nlp.time.SUTime.IsoDate;
 public class SUTimeDemo2 {
 	
 	static AnnotationPipeline pipeline = null;
 	
 	public static void setup() {
 		try {
-			String defs_sutime = "D:/workplcae3/stanford-corenlp-full-2018-02-27/sutime/defs.sutime.txt";
-	        String holiday_sutime = "D:/workplcae3/stanford-corenlp-full-2018-02-27/sutime/english.holidays.sutime.txt";
-	        String _sutime = "D:/workplcae3/stanford-corenlp-full-2018-02-27/sutime/english.sutime.txt";
+			String defs_sutime = "/root/NLP/stanford-corenlp-full-2018-02-27/sutime/defs.sutime.txt";
+	        String holiday_sutime = "/root/NLP/stanford-corenlp-full-2018-02-27/sutime/english.holidays.sutime.txt";
+	        String _sutime = "/root/NLP/stanford-corenlp-full-2018-02-27/sutime/english.sutime.txt";
 	        pipeline = new AnnotationPipeline();
 	        Properties properties = new Properties();
 	        String sutimeRules = defs_sutime + "," + holiday_sutime + "," + _sutime;
@@ -73,6 +79,7 @@ public class SUTimeDemo2 {
 			if (pipeline!=null)
 			{
 				Annotation annotation = new Annotation(text);
+				
 				annotation.set(CoreAnnotations.DocDateAnnotation.class, referenceDate);
 				pipeline.annotate(annotation);
 				List<CoreMap>timexAnnsAll = annotation.get(TimeAnnotations.TimexAnnotations.class);
@@ -81,23 +88,37 @@ public class SUTimeDemo2 {
 					try
 					{
 						List<CoreLabel>tokens = cm.get(CoreAnnotations.TokensAnnotation.class);
-						String startOffset = tokens.get(0).get(CoreAnnotations.CharacterOffsetBeginAnnotation.class).toString();
+						String beginOffset = tokens.get(0).get(CoreAnnotations.CharacterOffsetBeginAnnotation.class).toString();
 						String endOffset = tokens.get(tokens.size()-1).get(CoreAnnotations.CharacterOffsetEndAnnotation.class).toString();
 						Temporal temporal = cm.get(TimeExpression.Annotation.class).getTemporal();
 						/*System.out.println("Token text:" + cm.toString());
 						System.out.println("Temporal Value:" + temporal.toString());
 						System.out.println("Timex:" + temporal.getTimexValue());
 						System.out.println("Timex type:" + temporal.getTimexType().name());
-						System.out.println("Start offset:" + startOffset);
+						System.out.println("begin offset:" + beginOffset);
 						System.out.println("End Offset:" + endOffset);*/
 						String type = temporal.getTimexType().name();
 						String value = temporal.toString();
-						List<String> timeRange = Normalize(type, value);
-						for(String time:timeRange)
+						//System.out.println(temporal.getRange().begin());
+						//System.out.println(temporal.getRange().end());
+						//System.out.println("!");
+						List<String> timeRange = null;
+						if (type == "DATE" || type == "DURATION")
 						{
-							System.out.println(time);
+							timeRange = NormalizeDurationAndDate(temporal);
+						}
+						
+						else if (type == "TIME")
+						{
+							timeRange = NormalizeTime(value);
+						}
+						timeRange.add(cm.toString());
+						for(String ti:timeRange)
+						{
+							System.out.println(ti);
 						}
 						return timeRange;
+						
 					}catch (Exception e) {
 						e.printStackTrace();
 						// TODO: handle exception
@@ -106,7 +127,7 @@ public class SUTimeDemo2 {
 				
 			}
 			else {
-				System.out.println("Annotation Pipeline object is NULL.");
+				//System.out.println("Annotation Pipeline object is NULL.");
 			}
 		
 		}catch (Exception e) {
@@ -116,203 +137,164 @@ public class SUTimeDemo2 {
 		return null;
 	}
 	
-	public static List<String> Normalize(String type, String value) {
+	public static List<String> NormalizeDurationAndDate(Temporal temporal) //默认beginTime,endTime 格式一样。
+	{
 		List<String> returnTime = new ArrayList<>();
-		if (type == "DATE")
-		{	
-			Pattern pattern1 = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
-			Matcher matcher1 = pattern1.matcher(value);
-
-			while (matcher1.find()) 
+		String beginTime = temporal.getRange().begin().toString();
+		String endTime = temporal.getRange().end().toString();
+		
+		Pattern pattern1 = Pattern.compile("\\d{4}-[A-Z]+-[A-Z]+");
+		Matcher matcher1 = pattern1.matcher(beginTime);
+		Matcher matcher2 = pattern1.matcher(endTime);
+		while(matcher1.find())
+		{
+			beginTime = matcher1.group().substring(0, 4);
+			while(matcher2.find())
+			{
+				//System.out.println(matcher2.group());
+				endTime = matcher2.group().substring(0, 4);
+			}
+		}
+		if (beginTime.length() <= 4)
+		{
+			beginTime = beginTime + "-01-01T00:00:00";
+			endTime = endTime + "-12-31T23:59:59";
+		}
+		else if (beginTime.length() <= 7) 
+		{
+			beginTime = beginTime + "-01T00:00:00";
+			
+			Calendar calendar = Calendar.getInstance();
+			calendar.set(calendar.YEAR, 2019);
+			calendar.set(calendar.MONTH, Integer.parseInt(endTime.substring(5,7))-1);
+	        int lastDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH);
+	        calendar.set(Calendar.DAY_OF_MONTH, lastDay);
+	        
+	        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+	        String lastDayOfMonth = sdf.format(calendar.getTime());
+			endTime = endTime + "-" + lastDayOfMonth.substring(8, 10) + "T23:59:59";
+		}
+		else if (beginTime.length() <= 10)
+		{
+			beginTime = beginTime + "T00:00:00";
+			endTime = endTime + "T23:59:59";
+		}
+		else if (beginTime.length() <= 13) 
+		{
+			beginTime = beginTime + ":00:00";
+			endTime = endTime + ":00:00";
+		}
+		DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+		beginTime = beginTime.replace("T", " ");
+		endTime = endTime.replace("T", " ");
+		try {
+			Date beginDate = dateFormat.parse(beginTime);
+			Date endDate = dateFormat.parse(endTime);
+			//System.out.println(beginDate.getTime());
+			//System.out.println(endDate.getTime());
+			Long longBeginDate = beginDate.getTime();
+			Long longEndDate = endDate.getTime();
+			
+			returnTime.add(longBeginDate.toString());
+			returnTime.add(longEndDate.toString());
+		} catch (ParseException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		//System.out.println(beginTime);
+		//System.out.println(endTime);
+		
+		return returnTime;
+	}
+	
+	public static List<String> NormalizeTime(String value) {
+		List<String> returnTime = new ArrayList<>();
+		Pattern pattern1 = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+		Pattern pattern2 = Pattern.compile("T[a-zA-Z0-9:]+");
+		Matcher matcher1 = pattern1.matcher(value);
+		Matcher matcher2 = pattern2.matcher(value);
+		String beginTime = null;
+		String endTime = null;
+		while (matcher1.find() && matcher2.find()) 
+		{
+			
+			if (matcher2.group().compareTo("TMO") == 0)
 			{
 				String tempTime = matcher1.group();
-				String startTime = matcher1.group() + "T00:00:00";
-				String endTime = matcher1.group() + "T23:59:59";
-				returnTime.add(startTime);
-				returnTime.add(endTime);
+				beginTime = matcher1.group() + "T08:00:00";
+				endTime = matcher1.group() + "T11:59:59";
 				//System.out.println(tempTime);
-				return returnTime;
-			}
-			return returnTime;
-			
-		}
-		else if (type == "TIME")
-		{
-			Pattern pattern1 = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
-			Pattern pattern2 = Pattern.compile("T[a-zA-Z0-9:]+");
-			Matcher matcher1 = pattern1.matcher(value);
-			Matcher matcher2 = pattern2.matcher(value);
-			
-			while (matcher1.find() && matcher2.find()) 
-			{
-				
-				if (matcher2.group().compareTo("TMO") == 0)
-				{
-					String tempTime = matcher1.group();
-					String startTime = matcher1.group() + "T06:00:00";
-					String endTime = matcher1.group() + "T11:59:59";
-					returnTime.add(startTime);
-					returnTime.add(endTime);
-					//System.out.println(tempTime);
-					return returnTime;
-				}
-				else if (matcher2.group().compareTo("TAF") == 0)
-				{
-					String tempTime = matcher1.group();
-					String startTime = matcher1.group() + "T13:00:00";
-					String endTime = matcher1.group() + "T18:59:59";
-					returnTime.add(startTime);
-					returnTime.add(endTime);
-					//System.out.println(tempTime);
-					return returnTime;
-				}
-				else if (matcher2.group().compareTo("TEV") == 0)
-				{
-					String tempTime = matcher1.group();
-					String startTime = matcher1.group() + "T19:00:00";
-					String endTime = matcher1.group() + "T23:59:59";
-					returnTime.add(startTime);
-					returnTime.add(endTime);
-					//System.out.println(tempTime);
-					return returnTime;
-				}
-				else 
-				{
-					String tempTime = matcher1.group();
-					if (matcher2.group().length() >= 6)
-					{
-						String startTime = matcher1.group() + matcher2.group().substring(0, 6) + ":00";
-						String endTime = matcher1.group() + matcher2.group().substring(0, 6) + ":59";
-						returnTime.add(startTime);
-						returnTime.add(endTime);
-					}
-					else
-					{
-						String startTime = matcher1.group() + matcher2.group();
-						String endTime = matcher1.group() + matcher2.group();
-						returnTime.add(startTime);
-						returnTime.add(endTime);
-					}
-					
-					//System.out.println(tempTime);
-					return returnTime;
-				}
-			}
-			return returnTime;
-				
-			
-		}
-		else if (type == "DURATION")
-		{
-			String tempTime = value.substring(value.length()-1, value.length());
-			Pattern pattern1 = Pattern.compile("([T0-9:-]+),([T0-9:-]+)");
-			Matcher matcher1 = pattern1.matcher(value);
-			
-			while (matcher1.find()) 
-			{
-				String currentTime = SUTime.getCurrentTime().toString().substring(0, 10);
-				String temp1 = matcher1.group(1);
-				String temp2 = matcher1.group(2);
-				if (temp1.length() <= 6) //2:00 to 6:00   T02:00
-				{
-					String returnTime1 = currentTime.concat(temp1+":00");
-					String returnTime2 = currentTime.concat(temp2+":59");
-					returnTime.add(returnTime1);
-					returnTime.add(returnTime2);
-					//System.out.println(returnTime1);
-					return returnTime;
-				}
-				else if (temp1.length() <= 9) //2:00:00
-				{
-					String returnTime1 = currentTime.concat(temp1);
-					String returnTime2 = currentTime.concat(temp2);
-					returnTime.add(returnTime1);
-					returnTime.add(returnTime2);
-					//System.out.println(returnTime1);
-					return returnTime;
-				}
-				else if (temp1.length() <= 10)//2018-10-10
-				{
-					String returnTime1 = temp1.concat("T00:00:00");
-					String returnTime2 = temp2.concat("T23:59:59");
-					//System.out.println(returnTime1);
-					return returnTime;
-				}
-				else 
-				{
-					returnTime.add(currentTime);
-					returnTime.add(currentTime);
-					return returnTime;
-				}
-			}
-			
-			Pattern pattern2 = Pattern.compile("P[0-9A-Za-z]+");
-			Matcher matcher2 = pattern2.matcher(value);
-			while (matcher2.find()) //for 2 hours/days.
-			{
-				String temp = matcher2.group();
-				String currentTime = SUTime.getCurrentTime().toString().substring(0, 12);
-				DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
-				if (temp.length() >= 4)
-				{
-					String string = temp.substring(temp.length()-1, temp.length());
-					String beAddedTime = temp.substring(temp.length()-2,temp.length()-1);
-					int beAddedTimeValue = Integer.parseInt(beAddedTime);
-					Calendar calendar = Calendar.getInstance();
-					if (string.compareTo("M") == 0)
-						calendar.add(calendar.MINUTE, beAddedTimeValue);
-					else if (string.compareTo("H") == 0)
-						calendar.add(calendar.HOUR_OF_DAY, beAddedTimeValue);
-					else if (string.compareTo("Y") == 0)
-						calendar.add(calendar.YEAR, beAddedTimeValue);
-					else if (string.compareTo("D") == 0)
-						calendar.add(calendar.DATE, beAddedTimeValue);
-					else if (string.compareTo("W") == 0)
-						calendar.add(calendar.WEEK_OF_YEAR, beAddedTimeValue);
-					//System.out.println(dateFormat.format(calendar.getTime()).replaceAll(" ", "T"));
-					String startTime = currentTime;
-					String endTime = dateFormat.format(calendar.getTime()).replaceAll(" ", "T");
-					returnTime.add(startTime);
-					returnTime.add(endTime);
-					return returnTime;
-					
-				}
-				else if (temp.length() == 3)
-				{
-					String string = temp.substring(temp.length()-1, temp.length());
-					String beAddedTime = temp.substring(temp.length()-2,temp.length()-1);
-					int beAddedTimeValue = Integer.parseInt(beAddedTime);
-					Calendar calendar = Calendar.getInstance();
-					if (string.compareTo("Y") == 0)
-						calendar.add(calendar.YEAR, beAddedTimeValue);
-					else if (string.compareTo("D") == 0)
-						calendar.add(calendar.DATE, beAddedTimeValue);
-					else if (string.compareTo("W") == 0)
-						calendar.add(calendar.WEEK_OF_YEAR, beAddedTimeValue);
-					//System.out.println(dateFormat.format(calendar.getTime()).replaceAll(" ", "T"));
-					String startTime = currentTime;
-					String endTime = dateFormat.format(calendar.getTime()).replaceAll(" ", "T");
-					returnTime.add(startTime);
-					returnTime.add(endTime);
-					return returnTime;
-				}
 				
 			}
+			else if (matcher2.group().compareTo("TAF") == 0)
+			{
+				String tempTime = matcher1.group();
+				beginTime = matcher1.group() + "T13:00:00";
+				endTime = matcher1.group() + "T18:59:59";
+				//System.out.println(tempTime);
+			}
+			else if (matcher2.group().compareTo("TEV") == 0)
+			{
+				String tempTime = matcher1.group();
+				beginTime = matcher1.group() + "T19:00:00";
+				endTime = matcher1.group() + "T23:59:59";
+				//System.out.println(tempTime);
+				
+			}
+			else 
+			{
+				String tempTime = matcher1.group();
+				if (matcher2.group().length() >= 6)
+				{
+					beginTime = matcher1.group() + matcher2.group().substring(0, 6) + ":00";
+					endTime = matcher1.group() + matcher2.group().substring(0, 6) + ":59";
+				}
+				else
+				{
+					beginTime = matcher1.group() + matcher2.group();
+					endTime = matcher1.group() + matcher2.group();
+				}
+				//System.out.println(tempTime);
+			}
 		}
-		String currentTime = SUTime.getCurrentTime().toString().substring(0, 12);
-		returnTime.add(currentTime);
-		returnTime.add(currentTime);
-		return returnTime;
+		
+		DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+		try {
+			beginTime = beginTime.replaceAll("T", " ");
+			endTime = endTime.replaceAll("T", " ");
+			Date beginDate = dateFormat.parse(beginTime);
+			Date endDate = dateFormat.parse(endTime);
+			//System.out.println(beginTime);
+			//System.out.println(endTime);
+			Long longBeginDate = beginDate.getTime();
+			Long longEndDate = endDate.getTime();
+			returnTime.add(longBeginDate.toString());
+			returnTime.add(longEndDate.toString());
+			
+			
+		} catch (ParseException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}	
+	
+	return returnTime;	
+	}
+	public static List<String> Parse(String string) {
+		setup();
+		String currentTime = SUTime.getCurrentTime().toString();
+		String formatTime = currentTime.substring(0, 10);
+		List<String> message = null;
+		message = annotateText(string,formatTime);
+		
+		return message;
 	}
 	
 	public static void main(String[] args)
 	{
-		setup();
-		String currentTime = SUTime.getCurrentTime().toString();
-		String formatTime = currentTime.substring(0, 10);
 		for (String string:args)
 		{
-			annotateText(string,formatTime);
+			Parse(string);
 		}
 		
 	}
