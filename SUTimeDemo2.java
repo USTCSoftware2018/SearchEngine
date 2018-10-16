@@ -113,10 +113,7 @@ public class SUTimeDemo2 {
 							timeRange = NormalizeTime(value);
 						}
 						timeRange.add(cm.toString());
-						for(String ti:timeRange)
-						{
-							System.out.println(ti);
-						}
+						
 						return timeRange;
 						
 					}catch (Exception e) {
